@@ -5,9 +5,11 @@ import {
   computed,
   effect,
   inject,
+  signal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
+import { FormBuilder, FormControl, ReactiveFormsModule } from '@angular/forms';
+import { InputNumber } from 'primeng/inputnumber';
 
 import { MotorDirection } from '../models/ride.models';
 import { RideLifecycleService } from '../state/ride-lifecycle.service';
@@ -25,7 +27,7 @@ import { RideStateService } from '../state/ride-state.service';
 @Component({
   selector: 'bb-operation-controls',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule],
+  imports: [InputNumber, ReactiveFormsModule],
   template: `
     <section
       class="controls"
@@ -98,6 +100,41 @@ import { RideStateService } from '../state/ride-state.service';
         </div>
       </form>
 
+      <form class="duration-control" (ngSubmit)="submitCycleDuration()">
+        <div class="control-head">
+          <label for="cycle-duration">Cycle duration</label>
+          <output>{{ confirmedCycleDuration() }} min confirmed</output>
+        </div>
+        <div class="control-row">
+          <p-inputnumber
+            inputId="cycle-duration"
+            [formControl]="cycleDurationControl"
+            [min]="1"
+            [step]="1"
+            [showButtons]="true"
+            [useGrouping]="false"
+            suffix=" min"
+            aria-describedby="cycle-duration-help"
+          />
+          <button
+            type="button"
+            class="apply-duration"
+            [disabled]="isCycleDurationLocked()"
+            (click)="submitCycleDuration()"
+          >
+            Apply
+          </button>
+        </div>
+        <p id="cycle-duration-help" class="hint">
+          Applies to the next cycle. The confirmed value updates from ride telemetry.
+        </p>
+        @if (cycleDurationError()) {
+          <p class="error" role="alert">
+            Enter a positive whole number of minutes that safely converts to seconds.
+          </p>
+        }
+      </form>
+
       <div class="control">
         <div class="control-row">
           <span id="brake-label">Gondola brakes</span>
@@ -141,6 +178,14 @@ import { RideStateService } from '../state/ride-state.service';
     form {
       display: grid;
       gap: 1rem;
+    }
+    .duration-control {
+      display: grid;
+      gap: 0.5rem;
+    }
+    p-inputnumber {
+      flex: 1 1 auto;
+      min-width: 0;
     }
     .control {
       display: grid;
@@ -214,7 +259,22 @@ import { RideStateService } from '../state/ride-state.service';
       font-weight: 600;
       cursor: pointer;
     }
+    .apply-duration {
+      flex: 0 0 auto;
+      padding: 0.45rem 0.8rem;
+      border: 1px solid var(--bb-accent);
+      border-radius: 0.4rem;
+      background: var(--bb-accent);
+      color: var(--bb-accent-contrast);
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
     .apply-brakes:focus-visible {
+      outline: 2px solid var(--bb-focus);
+      outline-offset: 2px;
+    }
+    .apply-duration:focus-visible {
       outline: 2px solid var(--bb-focus);
       outline-offset: 2px;
     }
@@ -224,6 +284,7 @@ import { RideStateService } from '../state/ride-state.service';
     }
     .toggle:disabled,
     .apply-brakes:disabled,
+    .apply-duration:disabled,
     input[type='range']:disabled {
       opacity: 0.5;
       cursor: not-allowed;
@@ -232,6 +293,11 @@ import { RideStateService } from '../state/ride-state.service';
       margin: 0;
       font-size: 0.85rem;
       color: var(--bb-muted);
+    }
+    .error {
+      margin: 0;
+      color: var(--bb-danger);
+      font-size: 0.85rem;
     }
   `,
 })
@@ -250,11 +316,21 @@ export class OperationControls {
   protected readonly hubDirection = this.rideState.hubDirection;
   protected readonly gondolaBrakeEngaged = this.rideState.gondolaBrakeEngaged;
   protected readonly brakesEngaged = this.rideState.brakesEngaged;
+  protected readonly confirmedCycleDuration = this.rideState.cycleDurationMinutes;
+  protected readonly isCycleDurationLocked = computed(() =>
+    ['started', 'stopping', 'emergency-stop'].includes(this.lifecycle.state()),
+  );
+  protected readonly cycleDurationError = signal(false);
+  protected readonly cycleDurationControl = new FormControl<number | null>(
+    this.rideState.cycleDurationMinutes(),
+  );
 
   protected readonly form = this.fb.nonNullable.group({
     millPower: this.rideState.mill().power,
     hubPower: this.rideState.hubPower(),
   });
+
+  private lastConfirmedCycleDuration = this.rideState.cycleDurationMinutes();
 
   constructor() {
     this.form.controls.millPower.valueChanges
@@ -264,6 +340,10 @@ export class OperationControls {
     this.form.controls.hubPower.valueChanges
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((value) => this.rideState.setHubPower(Number(value)));
+
+    this.cycleDurationControl.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.cycleDurationError.set(false));
 
     // Keep the sliders in sync when power changes elsewhere, without looping.
     effect(() => {
@@ -276,6 +356,22 @@ export class OperationControls {
       const power = this.rideState.hubPower();
       if (this.form.controls.hubPower.value !== power) {
         this.form.controls.hubPower.setValue(power, { emitEvent: false });
+      }
+    });
+
+    effect(() => {
+      const confirmedDuration = this.rideState.cycleDurationMinutes();
+      if (confirmedDuration !== this.lastConfirmedCycleDuration) {
+        this.lastConfirmedCycleDuration = confirmedDuration;
+        this.cycleDurationControl.setValue(confirmedDuration, { emitEvent: false });
+      }
+    });
+
+    effect(() => {
+      if (this.isCycleDurationLocked()) {
+        this.cycleDurationControl.disable({ emitEvent: false });
+      } else {
+        this.cycleDurationControl.enable({ emitEvent: false });
       }
     });
 
@@ -331,5 +427,12 @@ export class OperationControls {
   /** Toggle the engine brake to the opposite of its currently reported state. */
   protected toggleEngineBrakes(): void {
     this.rideState.setEngineBrakes(!this.brakesEngaged());
+  }
+
+  protected submitCycleDuration(): void {
+    const durationMinutes = this.cycleDurationControl.value;
+    this.cycleDurationError.set(
+      durationMinutes === null || !this.rideState.setCycleDurationMinutes(durationMinutes),
+    );
   }
 }

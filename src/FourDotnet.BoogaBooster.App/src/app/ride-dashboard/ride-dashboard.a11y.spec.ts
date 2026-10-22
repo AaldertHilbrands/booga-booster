@@ -26,7 +26,14 @@ const TELEMETRY_URL = '/api/ride/telemetry';
 describe('RideDashboard accessibility', () => {
   it('has no AXE violations', async () => {
     const source = new FakeRideTelemetrySource();
-    source.setTelemetry(createTelemetry({ state: 'started', gondolas: createGondolas(10, true) }));
+    source.setTelemetry(
+      createTelemetry({
+        state: 'stopping',
+        gondolas: createGondolas(10, true),
+        stopRampProgress: 0.5,
+        brakeApplication: 0.75,
+      }),
+    );
     const weather = new FakeWeatherSource();
     weather.setStatus('ready');
     weather.setConditions(createConditions());
@@ -47,8 +54,8 @@ describe('RideDashboard accessibility', () => {
 
     const http = TestBed.inject(HttpTestingController);
     const dto: RideTelemetryDto = {
-      state: 'Started',
-      availableTransitions: ['Stopping', 'EmergencyStop'],
+      state: 'Stopping',
+      availableTransitions: ['Offloading', 'EmergencyStop'],
     };
     http.expectOne(TELEMETRY_URL).flush(dto);
 

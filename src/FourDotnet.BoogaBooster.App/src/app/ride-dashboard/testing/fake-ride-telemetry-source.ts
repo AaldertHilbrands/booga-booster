@@ -10,6 +10,7 @@ import {
   SEATS_PER_GONDOLA,
   Seat,
   SeatState,
+  DEFAULT_CYCLE_DURATION_MINUTES,
   clampPower,
 } from '../models/ride.models';
 
@@ -68,6 +69,9 @@ export class FakeRideTelemetrySource implements RideTelemetrySource {
           hubs: command.engaged ? current.hubs.map((hub) => ({ ...hub, power: 0 })) : current.hubs,
         });
         break;
+      case 'set-cycle-duration':
+        this.telemetrySignal.set({ ...current, cycleDurationMinutes: command.durationMinutes });
+        break;
     }
   }
 
@@ -92,6 +96,10 @@ export function createTelemetry(overrides: Partial<RideTelemetry> = {}): RideTel
     gondolas: createGondolas(),
     gondolaBrakeEngaged: false,
     brakesEngaged: false,
+    cycleDurationMinutes: DEFAULT_CYCLE_DURATION_MINUTES,
+    remainingCycleTimeSeconds: 0,
+    stopRampProgress: 0,
+    brakeApplication: 0,
     ...overrides,
   };
 }

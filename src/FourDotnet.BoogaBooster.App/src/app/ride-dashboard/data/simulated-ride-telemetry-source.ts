@@ -8,12 +8,14 @@ import {
   GONDOLA_COUNT,
   Gondola,
   HUB_COUNT,
+  CycleDurationMinutes,
   MotorDirection,
   RideCommand,
   RideState,
   RideTelemetry,
   SEATS_PER_GONDOLA,
   Seat,
+  DEFAULT_CYCLE_DURATION_MINUTES,
   clampPower,
 } from '../models/ride.models';
 
@@ -42,6 +44,7 @@ interface CommandState {
   hubDirection: MotorDirection;
   gondolaBrakeEngaged: boolean;
   brakesEngaged: boolean;
+  cycleDurationMinutes: CycleDurationMinutes;
 }
 
 /**
@@ -63,6 +66,7 @@ export class SimulatedRideTelemetrySource implements RideTelemetrySource {
     hubDirection: 'forward',
     gondolaBrakeEngaged: false,
     brakesEngaged: false,
+    cycleDurationMinutes: DEFAULT_CYCLE_DURATION_MINUTES,
   };
 
   private millSpeed = 0;
@@ -112,6 +116,9 @@ export class SimulatedRideTelemetrySource implements RideTelemetrySource {
           this.commands.millPower = 0;
           this.commands.hubPower = 0;
         }
+        break;
+      case 'set-cycle-duration':
+        this.commands.cycleDurationMinutes = command.durationMinutes;
         break;
     }
     // Echo the command immediately so controls and status reflect it at once.
@@ -175,6 +182,10 @@ export class SimulatedRideTelemetrySource implements RideTelemetrySource {
       gondolas,
       gondolaBrakeEngaged: this.commands.gondolaBrakeEngaged,
       brakesEngaged: this.commands.brakesEngaged,
+      cycleDurationMinutes: this.commands.cycleDurationMinutes,
+      remainingCycleTimeSeconds: 0,
+      stopRampProgress: 0,
+      brakeApplication: this.commands.brakesEngaged ? 1 : 0,
     };
   }
 

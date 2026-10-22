@@ -6,6 +6,7 @@ import {
   GONDOLA_COUNT,
   Gondola,
   HUB_COUNT,
+  DEFAULT_CYCLE_DURATION_MINUTES,
   MotorDirection,
   RideCommand,
   RideTelemetry,
@@ -27,6 +28,7 @@ const HUB_DIRECTION_URL = '/api/ride/hub-direction';
 const BRAKE_URL = '/api/ride/brake';
 const STATE_URL = '/api/ride/state';
 const ENGINE_BRAKE_URL = '/api/ride/engine-brake';
+const CYCLE_DURATION_URL = '/api/ride/cycle-duration';
 
 /**
  * The minimal surface of the browser `EventSource` this source depends on.
@@ -85,6 +87,10 @@ export function atRestTelemetry(): RideTelemetry {
     gondolas,
     gondolaBrakeEngaged: true,
     brakesEngaged: false,
+    cycleDurationMinutes: DEFAULT_CYCLE_DURATION_MINUTES,
+    remainingCycleTimeSeconds: 0,
+    stopRampProgress: 0,
+    brakeApplication: 0,
     boardedPassengerCount: 0,
   };
 }
@@ -145,6 +151,11 @@ export class SseRideTelemetrySource implements RideTelemetrySource {
         break;
       case 'brake-engines':
         this.brakeEngines(command.engaged);
+        break;
+      case 'set-cycle-duration':
+        this.http
+          .post(CYCLE_DURATION_URL, { durationMinutes: command.durationMinutes })
+          .subscribe();
         break;
     }
   }

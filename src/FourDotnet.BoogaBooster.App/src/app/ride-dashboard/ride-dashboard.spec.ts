@@ -74,4 +74,40 @@ describe('RideDashboard', () => {
     expect(text).toContain('20');
     expect(text).toContain('Secured');
   });
+
+  it('shows the server-reported countdown and controlled-stop progress', () => {
+    source.setTelemetry(
+      createTelemetry({
+        state: 'started',
+        remainingCycleTimeSeconds: 89,
+        stopRampProgress: 0.4,
+        brakeApplication: 0.65,
+      }),
+    );
+    const fixture = TestBed.createComponent(RideDashboard);
+    http.expectOne(TELEMETRY_URL).flush({
+      state: 'Started',
+      availableTransitions: ['Stopping', 'EmergencyStop'],
+    } satisfies RideTelemetryDto);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('1:29');
+
+    source.setTelemetry(
+      createTelemetry({
+        state: 'stopping',
+        remainingCycleTimeSeconds: 0,
+        stopRampProgress: 0.4,
+        brakeApplication: 0.65,
+      }),
+    );
+    fixture.detectChanges();
+
+    const progress = fixture.nativeElement.querySelectorAll('progress');
+    expect(progress).toHaveLength(2);
+    expect((progress[0] as HTMLProgressElement).value).toBe(0.4);
+    expect((progress[1] as HTMLProgressElement).value).toBe(0.65);
+    expect(fixture.nativeElement.textContent).toContain('40%');
+    expect(fixture.nativeElement.textContent).toContain('65%');
+  });
 });

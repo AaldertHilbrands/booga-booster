@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 
 import { RIDE_TELEMETRY_SOURCE } from '../data/ride-telemetry-source';
-import { GONDOLA_COUNT } from '../models/ride.models';
+import { GONDOLA_COUNT, toCycleDurationMinutes } from '../models/ride.models';
 import {
   createTelemetry,
   createGondolas,
@@ -86,6 +86,40 @@ describe('RideStateService', () => {
     service.setMillPower(60);
     expect(service.state()).toBe('started');
   });
+
+  it('dispatches a valid duration and reflects the source telemetry value', () => {
+    expect(service.cycleDurationMinutes()).toBe(5);
+
+    expect(service.setCycleDurationMinutes(12)).toBe(true);
+
+    expect(source.commands).toContainEqual({ kind: 'set-cycle-duration', durationMinutes: 12 });
+    expect(service.cycleDurationMinutes()).toBe(12);
+
+    source.setTelemetry(createTelemetry({ cycleDurationMinutes: toCycleDurationMinutes(12)! }));
+    expect(service.cycleDurationMinutes()).toBe(12);
+  });
+
+  it.each([0, -1, 1.2, Number.MAX_SAFE_INTEGER])(
+    'rejects invalid or seconds-unsafe duration %s',
+    (durationMinutes) => {
+      expect(service.setCycleDurationMinutes(durationMinutes)).toBe(false);
+      expect(source.commands).not.toContainEqual(
+        expect.objectContaining({ kind: 'set-cycle-duration' }),
+      );
+    },
+  );
+
+  it.each(['started', 'stopping', 'emergency-stop'] as const)(
+    'rejects duration changes while %s',
+    (state) => {
+      source.setTelemetry(createTelemetry({ state }));
+
+      expect(service.setCycleDurationMinutes(10)).toBe(false);
+      expect(source.commands).not.toContainEqual(
+        expect.objectContaining({ kind: 'set-cycle-duration' }),
+      );
+    },
+  );
 
   it('computes occupied seats and secured security state', () => {
     source.setTelemetry(createTelemetry({ gondolas: createGondolas(10) }));

@@ -1,8 +1,9 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { FormControl } from '@angular/forms';
 
 import { RIDE_TELEMETRY_SOURCE } from '../data/ride-telemetry-source';
-import { RideState } from '../models/ride.models';
+import { RideState, toCycleDurationMinutes } from '../models/ride.models';
 import { RideLifecycleService } from '../state/ride-lifecycle.service';
 import { FakeRideTelemetrySource } from '../testing/fake-ride-telemetry-source';
 import { OperationControls } from './operation-controls';
@@ -144,6 +145,77 @@ describe('OperationControls', () => {
     expect((host.querySelector('.toggle.brake') as HTMLButtonElement).disabled).toBe(false);
     expect((host.querySelector('.apply-brakes') as HTMLButtonElement).disabled).toBe(false);
     expect(host.querySelector('#controls-hint')).toBeNull();
+  });
+
+  it('initializes the duration from confirmed telemetry and submits a changed value', () => {
+    source.setTelemetry({
+      ...source.telemetry(),
+      cycleDurationMinutes: toCycleDurationMinutes(8)!,
+    });
+    lifecycle.setState('idle');
+    const fixture = render();
+    const input = fixture.nativeElement.querySelector('#cycle-duration') as HTMLInputElement;
+    expect(input.value).toContain('8');
+    const durationControl = (
+      fixture.componentInstance as unknown as {
+        cycleDurationControl: FormControl<number | null>;
+      }
+    ).cycleDurationControl;
+    durationControl.setValue(12);
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('.apply-duration') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(source.commands).toContainEqual({ kind: 'set-cycle-duration', durationMinutes: 12 });
+    expect(fixture.nativeElement.textContent).toContain('12 min confirmed');
+  });
+
+  it('keeps the confirmed duration unchanged when the input is invalid', () => {
+    lifecycle.setState('idle');
+    const fixture = render();
+    const durationControl = (
+      fixture.componentInstance as unknown as {
+        cycleDurationControl: FormControl<number | null>;
+      }
+    ).cycleDurationControl;
+    durationControl.setValue(0);
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('.apply-duration') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(source.commands.some((command) => command.kind === 'set-cycle-duration')).toBe(false);
+    expect(fixture.nativeElement.querySelector('[role="alert"]')?.textContent).toContain(
+      'positive whole number',
+    );
+  });
+
+  it.each(['started', 'stopping', 'emergency-stop'] as const)(
+    'disables duration configuration while %s',
+    (state) => {
+      lifecycle.setState(state);
+      const fixture = render();
+
+      expect(
+        (fixture.nativeElement.querySelector('#cycle-duration') as HTMLInputElement).disabled,
+      ).toBe(true);
+      expect(
+        (fixture.nativeElement.querySelector('.apply-duration') as HTMLButtonElement).disabled,
+      ).toBe(true);
+    },
+  );
+
+  it('updates the input and confirmed label when telemetry confirms a duration', async () => {
+    lifecycle.setState('idle');
+    const fixture = render();
+    source.setTelemetry({
+      ...source.telemetry(),
+      cycleDurationMinutes: toCycleDurationMinutes(11)!,
+    });
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('11 min confirmed');
   });
 
   it('engages the engine brake toggle when clicked while started, and reflects aria-pressed', () => {

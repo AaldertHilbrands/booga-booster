@@ -16,6 +16,22 @@
 export type RideState =
   'idle' | 'loading' | 'safe' | 'started' | 'stopping' | 'offloading' | 'emergency-stop';
 
+declare const cycleDurationMinutesBrand: unique symbol;
+
+/** Positive whole minutes that can be safely converted to simulation seconds. */
+export type CycleDurationMinutes = number & { readonly [cycleDurationMinutesBrand]: true };
+
+/** The server's default ride-cycle duration. */
+export const DEFAULT_CYCLE_DURATION_MINUTES = 5 as CycleDurationMinutes;
+
+/** Return a typed duration only when it is a representable positive whole minute value. */
+export function toCycleDurationMinutes(value: number): CycleDurationMinutes | null {
+  if (!Number.isSafeInteger(value) || value <= 0 || !Number.isSafeInteger(value * 60)) {
+    return null;
+  }
+  return value as CycleDurationMinutes;
+}
+
 /** Direction a motor drives its rotation. */
 export type MotorDirection = 'forward' | 'reverse';
 
@@ -99,6 +115,14 @@ export interface Gondola {
 /** A full snapshot of ride telemetry. */
 export interface RideTelemetry {
   readonly state: RideState;
+  /** Server-configured duration for this and future cycles, in whole minutes. */
+  readonly cycleDurationMinutes: CycleDurationMinutes;
+  /** Server-reported remaining time for the active cycle, in seconds. */
+  readonly remainingCycleTimeSeconds: number;
+  /** Server-reported normal-stop ramp progress, normalized to [0, 1]. */
+  readonly stopRampProgress: number;
+  /** Server-reported engine-brake application, normalized to [0, 1]. */
+  readonly brakeApplication: number;
   /** The operator-triggerable target states legal right now. */
   readonly availableTransitions: readonly RideState[];
   readonly mill: Mill;
@@ -133,6 +157,10 @@ export interface RideTelemetry {
 export interface RideTelemetryDto {
   readonly state: number | string;
   readonly availableTransitions: readonly (number | string)[];
+  readonly cycleDurationMinutes?: number;
+  readonly remainingCycleTimeSeconds?: number;
+  readonly stopRampProgress?: number;
+  readonly brakeApplication?: number;
 }
 
 /**
@@ -234,6 +262,10 @@ export interface RideTelemetryStreamDto {
   readonly gondolas: readonly RideTelemetryGondolaStreamDto[];
   readonly boardedPassengerCount: number;
   readonly brakesEngaged?: boolean;
+  readonly cycleDurationMinutes?: number;
+  readonly remainingCycleTimeSeconds?: number;
+  readonly stopRampProgress?: number;
+  readonly brakeApplication?: number;
 }
 
 /** The backend's `GondolaBrakeState` names in index order (`0=Engaged, 1=Released`). */
@@ -349,6 +381,12 @@ export function mapRideTelemetry(dto: RideTelemetryStreamDto): RideTelemetry {
   return {
     state: toRideState(dto.state),
     availableTransitions: dto.availableTransitions.map(toRideState),
+    cycleDurationMinutes:
+      toCycleDurationMinutes(dto.cycleDurationMinutes ?? DEFAULT_CYCLE_DURATION_MINUTES) ??
+      DEFAULT_CYCLE_DURATION_MINUTES,
+    remainingCycleTimeSeconds: finiteNonNegative(dto.remainingCycleTimeSeconds),
+    stopRampProgress: normalizedProgress(dto.stopRampProgress),
+    brakeApplication: normalizedProgress(dto.brakeApplication),
     mill: {
       power: fromWatts(dto.mill.powerWatts, MILL_MAX_POWER_WATTS),
       direction: motorDirection(dto.mill.direction),
@@ -369,6 +407,14 @@ export function mapRideTelemetry(dto: RideTelemetryStreamDto): RideTelemetry {
     // Defaults to released for an older frame that doesn't carry the field.
     brakesEngaged: dto.brakesEngaged ?? false,
   };
+}
+
+function finiteNonNegative(value: number | undefined): number {
+  return value !== undefined && Number.isFinite(value) ? Math.max(0, value) : 0;
+}
+
+function normalizedProgress(value: number | undefined): number {
+  return value !== undefined && Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0;
 }
 
 /** Set the central mill motor power (0–100). */
@@ -417,6 +463,12 @@ export interface BrakeEnginesCommand {
   readonly engaged: boolean;
 }
 
+/** Configure the duration used by the next ride cycle. */
+export interface SetCycleDurationCommand {
+  readonly kind: 'set-cycle-duration';
+  readonly durationMinutes: CycleDurationMinutes;
+}
+
 /** Any operator command the ride-state service can dispatch. */
 export type RideCommand =
   | SetMillPowerCommand
@@ -425,7 +477,8 @@ export type RideCommand =
   | SetHubDirectionCommand
   | SetGondolaBrakeCommand
   | RequestStateTransitionCommand
-  | BrakeEnginesCommand;
+  | BrakeEnginesCommand
+  | SetCycleDurationCommand;
 
 /** Clamp a numeric value into the inclusive [min, max] range. */
 export function clampPower(value: number, min = MIN_POWER, max = MAX_POWER): number {

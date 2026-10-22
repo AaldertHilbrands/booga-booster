@@ -34,6 +34,14 @@
 
   <section class="rail rail-right" aria-label="Telemetry">
     <div class="panel">
+      <bb-cycle-status
+        [state]="ride.state()"
+        [remainingSeconds]="ride.remainingCycleTimeSeconds()"
+        [stopRampProgress]="ride.stopRampProgress()"
+        [brakeApplication]="ride.brakeApplication()"
+      />
+    </div>
+    <div class="panel">
       <bb-security-panel
         [passengers]="ride.occupiedSeats()"
         [securityState]="ride.securityState()"

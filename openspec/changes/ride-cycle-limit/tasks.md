@@ -21,14 +21,14 @@
 
 ## 4. Dashboard
 
-- [ ] 4.1 Add cycle-duration configuration to the operator controls, initialized from server telemetry, submitted through the new API, and disabled during `Started`, `Stopping`, and `EmergencyStop`.
-- [ ] 4.2 Show server-reported remaining cycle time while `Started` and controlled-stop/brake progress while `Stopping`.
-- [ ] 4.3 Add focused component and service tests for initialization, valid/invalid changes, disabled states, countdown/progress mapping, and server-confirmed updates.
-- [ ] 4.4 Add or update AXE accessibility coverage for the duration input and stop-progress indication.
+- [x] 4.1 Add cycle-duration configuration to the operator controls, initialized from server telemetry, submitted through the new API, and disabled during `Started`, `Stopping`, and `EmergencyStop`.
+- [x] 4.2 Show server-reported remaining cycle time while `Started` and controlled-stop/brake progress while `Stopping`.
+- [x] 4.3 Add focused component and service tests for initialization, valid/invalid changes, disabled states, countdown/progress mapping, and server-confirmed updates.
+- [x] 4.4 Add or update AXE accessibility coverage for the duration input and stop-progress indication.
 
 ## 5. Verify
 
 - [ ] 5.1 Consult the authoritative C# style guide and verify domain, CQRS, DTO, endpoint, telemetry, and test placement against applicable ADRs before implementation.
 - [ ] 5.2 Run focused DigitalTwin tests, then the backend solution tests; verify changed module coverage remains at least 80%.
-- [ ] 5.3 Run focused Angular tests and AXE checks, then the frontend test suite.
+- [x] 5.3 Run focused Angular tests and AXE checks, then the frontend test suite.
 - [ ] 5.4 Manually verify the default five-minute countdown, a changed duration on the next cycle, gradual mill/hub power reduction and brake application, normal offloading at rest, and immediate Emergency Stop behavior.

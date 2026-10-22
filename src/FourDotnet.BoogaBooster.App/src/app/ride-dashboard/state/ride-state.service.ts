@@ -9,8 +9,10 @@ import {
   MotorDirection,
   RideState,
   SecurityState,
+  CycleDurationMinutes,
   clampPower,
   loadBalanceState,
+  toCycleDurationMinutes,
   totalLoadKg,
 } from '../models/ride.models';
 
@@ -29,6 +31,18 @@ export class RideStateService {
 
   /** Overall ride state (stopped/running/emergency). */
   readonly state: Signal<RideState> = computed(() => this.telemetry().state);
+
+  /** Server-confirmed configured duration for the next cycle, in minutes. */
+  readonly cycleDurationMinutes: Signal<CycleDurationMinutes> = computed(
+    () => this.telemetry().cycleDurationMinutes,
+  );
+
+  /** Server-reported countdown and controlled-stop progress. */
+  readonly remainingCycleTimeSeconds: Signal<number> = computed(
+    () => this.telemetry().remainingCycleTimeSeconds,
+  );
+  readonly stopRampProgress: Signal<number> = computed(() => this.telemetry().stopRampProgress);
+  readonly brakeApplication: Signal<number> = computed(() => this.telemetry().brakeApplication);
 
   /** The central mill: commanded power/direction and sensed speed. */
   readonly mill: Signal<Mill> = computed(() => this.telemetry().mill);
@@ -130,5 +144,18 @@ export class RideStateService {
    */
   setEngineBrakes(engaged: boolean): void {
     this.source.applyCommand({ kind: 'brake-engines', engaged });
+  }
+
+  /** Submit a supported positive whole-minute duration for the next cycle. */
+  setCycleDurationMinutes(value: number): boolean {
+    const durationMinutes = toCycleDurationMinutes(value);
+    if (
+      durationMinutes === null ||
+      ['started', 'stopping', 'emergency-stop'].includes(this.state())
+    ) {
+      return false;
+    }
+    this.source.applyCommand({ kind: 'set-cycle-duration', durationMinutes });
+    return true;
   }
 }

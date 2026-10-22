@@ -9,6 +9,7 @@ import {
   RideTelemetryStreamDto,
   SEATS_PER_GONDOLA,
   mapRideTelemetry,
+  toCycleDurationMinutes,
 } from './ride.models';
 
 /** A hub DTO with the given index and no load, always forward. */
@@ -70,6 +71,31 @@ function buildDto(overrides: Partial<RideTelemetryStreamDto> = {}): RideTelemetr
 }
 
 describe('mapRideTelemetry', () => {
+  it('maps cycle timing fields and clamps progress to the normalized range', () => {
+    const model = mapRideTelemetry(
+      buildDto({
+        cycleDurationMinutes: 9,
+        remainingCycleTimeSeconds: 123.5,
+        stopRampProgress: 1.5,
+        brakeApplication: -0.2,
+      }),
+    );
+
+    expect(model.cycleDurationMinutes).toBe(9);
+    expect(model.remainingCycleTimeSeconds).toBe(123.5);
+    expect(model.stopRampProgress).toBe(1);
+    expect(model.brakeApplication).toBe(0);
+  });
+
+  it('uses the five-minute default when cycle fields are absent or invalid', () => {
+    const model = mapRideTelemetry(
+      buildDto({ cycleDurationMinutes: Number.MAX_SAFE_INTEGER, remainingCycleTimeSeconds: -4 }),
+    );
+
+    expect(model.cycleDurationMinutes).toBe(5);
+    expect(model.remainingCycleTimeSeconds).toBe(0);
+  });
+
   it('maps lifecycle state and available transitions from numeric enums', () => {
     const model = mapRideTelemetry(buildDto({ state: 3, availableTransitions: [4, 6] }));
 
@@ -235,5 +261,18 @@ describe('mapRideTelemetry', () => {
     const model = mapRideTelemetry(buildDto());
     expect(model.gondolas).toHaveLength(GONDOLA_COUNT);
     model.gondolas.forEach((gondola) => expect(gondola.seats).toHaveLength(SEATS_PER_GONDOLA));
+  });
+});
+
+describe('toCycleDurationMinutes', () => {
+  it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER])(
+    'rejects invalid or seconds-unsafe duration %s',
+    (value) => {
+      expect(toCycleDurationMinutes(value)).toBeNull();
+    },
+  );
+
+  it('accepts positive whole minutes whose seconds conversion is safe', () => {
+    expect(toCycleDurationMinutes(12)).toBe(12);
   });
 });

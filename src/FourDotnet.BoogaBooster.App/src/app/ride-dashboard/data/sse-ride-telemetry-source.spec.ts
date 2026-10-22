@@ -7,6 +7,7 @@ import {
   GONDOLAS_PER_HUB,
   HUB_COUNT,
   RideTelemetryStreamDto,
+  toCycleDurationMinutes,
 } from '../models/ride.models';
 import {
   EVENT_SOURCE_FACTORY,
@@ -284,6 +285,25 @@ describe('SseRideTelemetrySource', () => {
     // Releasing does not restore the pre-brake power.
     expect(source.telemetry().mill.power).toBe(0);
     expect(source.telemetry().hubs.every((hub) => hub.power === 0)).toBe(true);
+  });
+
+  it('posts cycle duration without changing the confirmed value before an SSE frame', () => {
+    const source = TestBed.inject(SseRideTelemetrySource);
+    source.applyCommand({
+      kind: 'set-cycle-duration',
+      durationMinutes: toCycleDurationMinutes(12)!,
+    });
+
+    const request = http.expectOne('/api/ride/cycle-duration');
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({ durationMinutes: 12 });
+    expect(source.telemetry().cycleDurationMinutes).toBe(5);
+
+    request.flush(null, { status: 202, statusText: 'Accepted' });
+    expect(source.telemetry().cycleDurationMinutes).toBe(5);
+
+    fakeEventSource.emit('ride-telemetry', runningDto({ cycleDurationMinutes: 12 }));
+    expect(source.telemetry().cycleDurationMinutes).toBe(12);
   });
 
   it('request-state-transition posts the backend PascalCase state name', () => {
