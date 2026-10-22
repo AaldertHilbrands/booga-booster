@@ -34,6 +34,9 @@ public interface IRideStore
     /// <summary>Advances the simulation by one fixed <paramref name="dt"/> step.</summary>
     RideTelemetry Advance(TimeSpan dt);
 
+    /// <summary>Sets the positive whole-minute ride-cycle duration for the next cycle.</summary>
+    RideTelemetry SetCycleDurationMinutes(long durationMinutes);
+
     /// <summary>Sets the main (mill) engine power.</summary>
     RideTelemetry SetMainEnginePower(EnginePower power);
 

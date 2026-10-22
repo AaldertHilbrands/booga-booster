@@ -14,7 +14,7 @@ public sealed class GreatMill : DomainModel
     private readonly Hub[] _hubs;
     private EnginePower _power = EnginePower.Off;
     private MotorDirection _direction = MotorDirection.Forward;
-    private bool _brakesEngaged;
+    private double _brakeApplication;
     private double _angle;
     private double _omega;
 
@@ -35,7 +35,10 @@ public sealed class GreatMill : DomainModel
     public MotorDirection Direction => _direction;
 
     /// <summary><c>true</c> while the engine brake is engaged on the mill and every hub.</summary>
-    public bool BrakesEngaged => _brakesEngaged;
+    public bool BrakesEngaged => _brakeApplication > 0d;
+
+    /// <summary>Normalized engine-brake torque application in the range [0, 1].</summary>
+    public double BrakeApplication => _brakeApplication;
 
     /// <summary>Current rotation angle (rad).</summary>
     public double Angle => _angle;
@@ -243,15 +246,12 @@ public sealed class GreatMill : DomainModel
     /// <summary>Sets the mill motor power (validated by the value object).</summary>
     public bool SetPower(EnginePower power)
     {
-        ArgumentNullException.ThrowIfNull(power);
         return ApplyChange(ref _power, power);
     }
 
     /// <summary>Sets the same commanded power on all four hub motors.</summary>
     public bool SetAllHubPower(EnginePower power)
     {
-        ArgumentNullException.ThrowIfNull(power);
-
         var changed = false;
         foreach (var hub in _hubs)
         {
@@ -290,11 +290,22 @@ public sealed class GreatMill : DomainModel
     public void EngageBrakes()
     {
         CutAllPower();
-        _brakesEngaged = true;
+        SetBrakeApplication(1d);
     }
 
-    /// <summary>Releases the engine brake; the ride can be driven again (power stays at zero until commanded).</summary>
-    public void ReleaseBrakes() => _brakesEngaged = false;
+    /// <summary>Sets the normalized brake application without changing commanded power.</summary>
+    public void SetBrakeApplication(double application)
+    {
+        if (!double.IsFinite(application) || application is < 0d or > 1d)
+        {
+            throw new DomainValidationException("Brake application must be a finite value between zero and one.");
+        }
+
+        _brakeApplication = application;
+    }
+
+    /// <summary>Releases the engine brake; power stays at its current command.</summary>
+    public void ReleaseBrakes() => SetBrakeApplication(0d);
 
     /// <summary>Advances natural passenger behaviour across the whole ride.</summary>
     public void AdvanceNaturalBehavior(TimeSpan elapsed)
@@ -311,14 +322,14 @@ public sealed class GreatMill : DomainModel
         var drive = _direction.Sign() * RotationalDynamics.MotorTorque(
             _power.Fraction, _omega, RideParameters.MillStallTorque, RideParameters.MillMaxPowerWatts);
 
-        var coulomb = RideParameters.MillCoulombFriction
-            + (_brakesEngaged ? RideParameters.MillBrakeTorque : 0d);
+        var brakeTorque = _brakeApplication * RideParameters.MillBrakeTorque;
 
         var step = RotationalDynamics.Integrate(
             _omega,
             _angle,
             drive,
-            coulomb,
+            RideParameters.MillCoulombFriction,
+            brakeTorque,
             RideParameters.MillViscousFriction,
             RideParameters.MillAeroDrag,
             Inertia,
@@ -330,7 +341,7 @@ public sealed class GreatMill : DomainModel
 
         foreach (var hub in _hubs)
         {
-            hub.AdvancePhysics(_angle, _omega, _brakesEngaged, dt);
+            hub.AdvancePhysics(_angle, _omega,             _brakeApplication, dt);
         }
     }
 

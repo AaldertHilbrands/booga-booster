@@ -26,6 +26,10 @@ namespace FourDotnet.BoogaBooster.DigitalTwin.Abstractions;
 /// <param name="Mill">The central mill's telemetry.</param>
 /// <param name="Hubs">The four hubs' telemetry.</param>
 /// <param name="Gondolas">The sixteen gondolas' telemetry.</param>
+/// <param name="CycleDurationMinutes">The configured ride-cycle duration, in minutes.</param>
+/// <param name="RemainingCycleTimeSeconds">The active cycle time remaining, or zero outside Started.</param>
+/// <param name="StopRampProgress">Normal-stop ramp progress in the range [0, 1].</param>
+/// <param name="BrakeApplication">Normalized engine-brake application in the range [0, 1].</param>
 public sealed record RideTelemetry(
     RideState State,
     double SimulationTimeSeconds,
@@ -36,4 +40,8 @@ public sealed record RideTelemetry(
     bool BrakesEngaged,
     MillTelemetry Mill,
     IReadOnlyList<HubTelemetry> Hubs,
-    IReadOnlyList<GondolaTelemetry> Gondolas);
+    IReadOnlyList<GondolaTelemetry> Gondolas,
+    long CycleDurationMinutes,
+    double RemainingCycleTimeSeconds,
+    double StopRampProgress,
+    double BrakeApplication);

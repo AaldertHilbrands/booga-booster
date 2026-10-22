@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using FourDotnet.BoogaBooster.Core;
 using FourDotnet.BoogaBooster.Core.Observability;
 using FourDotnet.BoogaBooster.DigitalTwin.Abstractions;
 using FourDotnet.BoogaBooster.DigitalTwin.Application;
@@ -11,6 +12,7 @@ using FourDotnet.BoogaBooster.DigitalTwin.Features.SetHubEngineDirection;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.SetHubEnginePower;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.SetMainEngineDirection;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.SetMainEnginePower;
+using FourDotnet.BoogaBooster.DigitalTwin.Features.SetRideCycleDuration;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.StartRide;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.StopRide;
 using Xunit;
@@ -40,6 +42,7 @@ public sealed class DigitalTwinHandlerTelemetryTests : IDisposable
     private const string GondolaBrakeTag = "ride.gondola.brake";
     private const string BoardedTag = "ride.passengers.boarded";
     private const string MillRpmTag = "ride.mill.rpm";
+    private const string CycleDurationTag = "ride.cycle.duration_minutes";
     private const string WeightSuppliedTag = "ride.passenger.weight_supplied";
 
     private readonly TelemetryRecorder _telemetry = new();
@@ -78,6 +81,63 @@ public sealed class DigitalTwinHandlerTelemetryTests : IDisposable
         var activity = _telemetry.Activity("SetHubEnginePower");
         Assert.Equal("hub", activity.GetTagItem(EngineTag));
         Assert.Equal(35d, activity.GetTagItem(PowerTag));
+    }
+
+    [Fact]
+    public async Task SetRideCycleDuration_TagsTheRequestedDuration_AndUsesSharedHandlerMetrics()
+    {
+        var store = NewStore();
+
+        using (_telemetry.Scope())
+        {
+            await new SetRideCycleDurationCommandHandler(store).HandleAsync(
+                new SetRideCycleDurationCommand(12),
+                Ct);
+        }
+
+        var activity = _telemetry.Activity("SetRideCycleDuration");
+        Assert.Equal(12L, activity.GetTagItem(CycleDurationTag));
+        Assert.Equal(nameof(RideState.Idle), activity.GetTagItem(StateTag));
+        Assert.Equal(12L, store.GetTelemetry().CycleDurationMinutes);
+        var invocation = _telemetry.Measurement(
+            "boogabooster.handler.invocations",
+            ("operation", "SetRideCycleDuration"),
+            ("kind", "command"),
+            ("outcome", "ok"));
+        Assert.Equal(1d, invocation.Value);
+        _telemetry.Measurement(
+            "boogabooster.handler.duration",
+            ("operation", "SetRideCycleDuration"),
+            ("kind", "command"),
+            ("outcome", "ok"));
+    }
+
+    [Fact]
+    public async Task SetRideCycleDuration_RecordsRejectedRunningRideFailure()
+    {
+        var store = NewStore();
+        store.RequestStateTransition(RideState.Loading);
+        store.RequestStateTransition(RideState.Safe);
+        store.RequestStateTransition(RideState.Started);
+
+        using (_telemetry.Scope())
+        {
+            await Assert.ThrowsAsync<DomainValidationException>(
+                () => new SetRideCycleDurationCommandHandler(store).HandleAsync(
+                    new SetRideCycleDurationCommand(12),
+                    Ct));
+        }
+
+        var activity = _telemetry.Activity("SetRideCycleDuration");
+        Assert.Equal(ActivityStatusCode.Error, activity.Status);
+        Assert.Equal(nameof(RideState.Started), activity.GetTagItem(StateTag));
+        Assert.Equal(5L, store.GetTelemetry().CycleDurationMinutes);
+        var invocation = _telemetry.Measurement(
+            "boogabooster.handler.invocations",
+            ("operation", "SetRideCycleDuration"),
+            ("kind", "command"),
+            ("outcome", "error"));
+        Assert.Equal(1d, invocation.Value);
     }
 
     [Fact]

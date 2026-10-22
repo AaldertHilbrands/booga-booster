@@ -62,6 +62,9 @@ internal static class RideTelemetryAttributes
     /// <summary>The mill's signed rotation speed in revolutions per minute.</summary>
     internal const string MillRpm = "ride.mill.rpm";
 
+    /// <summary>The configured ride-cycle duration, in minutes.</summary>
+    internal const string CycleDurationMinutes = "ride.cycle.duration_minutes";
+
     /// <summary>
     /// Whether a boarding command supplied a weight — never the weight itself, and
     /// never a passenger's name (ADR-0009 forbids personal data on a span).

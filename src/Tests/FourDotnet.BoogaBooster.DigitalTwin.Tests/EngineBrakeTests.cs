@@ -104,15 +104,24 @@ public sealed class EngineBrakeTests
     }
 
     [Fact]
-    public void Entering_stopping_engages_the_brake_and_cuts_power()
+    public void Entering_stopping_starts_the_normal_ramp_without_immediate_braking()
     {
         var ride = RunningRide();
         ride.SetMainEnginePower(new EnginePower(50));
+        ride.SetHubEnginePower(new EnginePower(40));
+        RideSafetyTests.Advance(ride, seconds: 1d);
 
         ride.RequestTransition(RideState.Stopping);
 
+        Assert.False(ride.Mill.BrakesEngaged);
+        Assert.Equal(50d, ride.Mill.Power.Percent);
+
+        ride.Advance(TestHelpers.Dt);
+
         Assert.True(ride.Mill.BrakesEngaged);
-        Assert.Equal(0d, ride.Mill.ToTelemetry().PowerWatts);
+        Assert.True(ride.Mill.Power.Percent < 50d);
+        Assert.True(ride.Mill.Power.Percent > 0d);
+        Assert.True(ride.ToTelemetry().BrakeApplication > 0d);
     }
 
     [Fact]
@@ -147,7 +156,7 @@ public sealed class EngineBrakeTests
         var ride = RunningRide();
 
         ride.RequestTransition(RideState.Stopping);
-        Assert.True(ride.Mill.BrakesEngaged);
+        Assert.False(ride.Mill.BrakesEngaged);
 
         // The empty ride is already at rest, so it settles: Stopping → Offloading → Idle,
         // and the engine brake is released on entering Offloading.

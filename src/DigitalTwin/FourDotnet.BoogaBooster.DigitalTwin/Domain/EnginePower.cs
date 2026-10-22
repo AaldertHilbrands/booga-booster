@@ -7,7 +7,7 @@ namespace FourDotnet.BoogaBooster.DigitalTwin.Domain;
 /// construction (ADR-0003). The operator commands power, not speed: the resulting
 /// rotation speed emerges from this setting, the friction, and the load.
 /// </summary>
-public sealed record EnginePower
+public readonly record struct EnginePower
 {
     /// <summary>Lowest setting — the motor is off.</summary>
     public const double MinPercent = 0d;

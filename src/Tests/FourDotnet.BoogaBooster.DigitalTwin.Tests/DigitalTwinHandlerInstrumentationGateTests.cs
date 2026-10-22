@@ -1,5 +1,6 @@
 using System.Reflection;
 using FourDotnet.BoogaBooster.Core.Cqrs;
+using FourDotnet.BoogaBooster.DigitalTwin.Features.SetRideCycleDuration;
 using Xunit;
 
 namespace FourDotnet.BoogaBooster.DigitalTwin.Tests;
@@ -57,7 +58,7 @@ public sealed class DigitalTwinHandlerInstrumentationGateTests
     }
 
     private static List<Type> HandlerTypes()
-        => [.. typeof(FourDotnet.BoogaBooster.DigitalTwin.Features.StartRide.StartRideCommandHandler).Assembly
+        => [.. typeof(SetRideCycleDurationCommandHandler).Assembly
             .GetTypes()
             .Where(type => type is { IsAbstract: false, IsClass: true } && DerivesFromHandlerBase(type))
             .OrderBy(type => type.Name, StringComparer.Ordinal)];

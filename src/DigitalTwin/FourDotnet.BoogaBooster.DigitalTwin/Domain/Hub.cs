@@ -142,7 +142,6 @@ public sealed class Hub : DomainModel
     /// <summary>Sets the commanded motor power (validated by the value object).</summary>
     public bool SetPower(EnginePower power)
     {
-        ArgumentNullException.ThrowIfNull(power);
         return ApplyChange(ref _power, power);
     }
 
@@ -163,19 +162,19 @@ public sealed class Hub : DomainModel
     /// speed are threaded through because the gondola field depends on them, and the
     /// engine-brake flag because the hubs brake together with the mill.
     /// </summary>
-    public void AdvancePhysics(double millAngle, double millOmega, bool brakesEngaged, double dt)
+    public void AdvancePhysics(double millAngle, double millOmega, double brakeApplication, double dt)
     {
         var drive = _direction.Sign() * RotationalDynamics.MotorTorque(
             _power.Fraction, _omega, RideParameters.HubStallTorque, RideParameters.HubMaxPowerWatts);
 
-        var coulomb = RideParameters.HubCoulombFriction
-            + (brakesEngaged ? RideParameters.HubBrakeTorque : 0d);
+        var brakeTorque = brakeApplication * RideParameters.HubBrakeTorque;
 
         var step = RotationalDynamics.Integrate(
             _omega,
             _angle,
             drive,
-            coulomb,
+            RideParameters.HubCoulombFriction,
+            brakeTorque,
             RideParameters.HubViscousFriction,
             RideParameters.HubAeroDrag,
             Inertia,

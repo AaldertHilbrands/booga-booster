@@ -117,7 +117,7 @@ public sealed class DrivenBodyTests
         hub.SetPower(new EnginePower(100));
         for (var i = 0; i < 120 * 60; i++)
         {
-            hub.AdvancePhysics(millAngle: 0d, millOmega: 0d, brakesEngaged: false, TestHelpers.Dt.TotalSeconds);
+            hub.AdvancePhysics(millAngle: 0d, millOmega: 0d, brakeApplication: 0d, TestHelpers.Dt.TotalSeconds);
         }
 
         hub.SetPower(EnginePower.Off);
@@ -126,7 +126,7 @@ public sealed class DrivenBodyTests
         const int cap = 120 * 600;
         while (!hub.IsAtRest && steps < cap)
         {
-            hub.AdvancePhysics(millAngle: 0d, millOmega: 0d, brakesEngaged: false, TestHelpers.Dt.TotalSeconds);
+            hub.AdvancePhysics(millAngle: 0d, millOmega: 0d, brakeApplication: 0d, TestHelpers.Dt.TotalSeconds);
             steps++;
         }
 

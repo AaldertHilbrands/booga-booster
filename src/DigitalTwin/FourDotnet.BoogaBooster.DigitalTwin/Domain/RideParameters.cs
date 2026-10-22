@@ -8,6 +8,15 @@ namespace FourDotnet.BoogaBooster.DigitalTwin.Domain;
 /// </summary>
 public static class RideParameters
 {
+    /// <summary>The default powered ride-cycle duration, in minutes.</summary>
+    public const long DefaultCycleDurationMinutes = 5;
+
+    /// <summary>
+    /// Reference duration for progressively removing drive power and applying the
+    /// normal-stop brake. It is a tuning reference, not a validated safety limit.
+    /// </summary>
+    public static readonly TimeSpan NormalStopRampDuration = TimeSpan.FromSeconds(8);
+
     // --- Passengers (spec: a person weighs between 30 and 150 kg) ---
     public const double MinPassengerKg = 30d;
     public const double MaxPassengerKg = 150d;

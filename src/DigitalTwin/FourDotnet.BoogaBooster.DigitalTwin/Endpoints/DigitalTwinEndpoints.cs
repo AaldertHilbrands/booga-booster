@@ -1,6 +1,7 @@
 using FourDotnet.BoogaBooster.Core;
 using FourDotnet.BoogaBooster.Core.Cqrs;
 using FourDotnet.BoogaBooster.DigitalTwin.Abstractions;
+using FourDotnet.BoogaBooster.DigitalTwin.Abstractions.Features.SetRideCycleDuration.DataTransferObjects;
 using FourDotnet.BoogaBooster.DigitalTwin.Application;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.BoardPassenger;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.BrakeEngines;
@@ -11,6 +12,7 @@ using FourDotnet.BoogaBooster.DigitalTwin.Features.SetHubEngineDirection;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.SetHubEnginePower;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.SetMainEngineDirection;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.SetMainEnginePower;
+using FourDotnet.BoogaBooster.DigitalTwin.Features.SetRideCycleDuration;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.StartRide;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.StopRide;
 using Microsoft.AspNetCore.Builder;
@@ -85,6 +87,15 @@ public static class DigitalTwinEndpoints
             CancellationToken cancellationToken) =>
             DispatchAsync(() => handler.HandleAsync(new SetHubEnginePowerCommand(request.Percent), cancellationToken)))
         .WithName("SetHubEnginePower");
+
+        group.MapPost("/cycle-duration", (
+            SetRideCycleDurationRequest request,
+            ICommandHandler<SetRideCycleDurationCommand> handler,
+            CancellationToken cancellationToken) =>
+            DispatchAsync(() => handler.HandleAsync(
+                new SetRideCycleDurationCommand(request.DurationMinutes),
+                cancellationToken)))
+        .WithName("SetRideCycleDuration");
 
         group.MapPost("/main-direction", (
             SetDirectionRequest request,

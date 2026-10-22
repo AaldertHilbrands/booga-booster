@@ -52,6 +52,13 @@ public sealed class Ride : DomainModel
     private readonly GreatMill _mill = new();
     private RideState _state = RideState.Idle;
     private double _simulationTimeSeconds;
+    private long _cycleDurationMinutes = RideParameters.DefaultCycleDurationMinutes;
+    private TimeSpan _capturedCycleDuration = TimeSpan.FromTicks(
+        RideParameters.DefaultCycleDurationMinutes * TimeSpan.TicksPerMinute);
+    private TimeSpan _elapsedCycleTime;
+    private EnginePower _stopEntryMillPower = EnginePower.Off;
+    private EnginePower _stopEntryHubPower = EnginePower.Off;
+    private TimeSpan _stopRampElapsed;
 
     private Ride()
         : base(isNew: true)
@@ -66,6 +73,24 @@ public sealed class Ride : DomainModel
 
     /// <summary>Simulated time elapsed since the twin started (seconds).</summary>
     public double SimulationTimeSeconds => _simulationTimeSeconds;
+
+    /// <summary>The configured duration for the next ride cycle, in whole minutes.</summary>
+    public long CycleDurationMinutes => _cycleDurationMinutes;
+
+    /// <summary>Simulation time remaining in the active cycle, or zero outside Started.</summary>
+    public TimeSpan RemainingCycleTime =>
+        _state == RideState.Started
+            ? _capturedCycleDuration - _elapsedCycleTime
+            : TimeSpan.Zero;
+
+    /// <summary>Normalized progress through the current normal-stop ramp.</summary>
+    public double StopRampProgress =>
+        _state is RideState.Stopping
+            ? Math.Clamp(_stopRampElapsed.TotalSeconds / RideParameters.NormalStopRampDuration.TotalSeconds, 0d, 1d)
+            : 0d;
+
+    /// <summary>Normalized engine-brake application.</summary>
+    public double BrakeApplication => _mill.BrakeApplication;
 
     /// <summary>The central mill (and, through it, the hubs and gondolas).</summary>
     public GreatMill Mill => _mill;
@@ -142,7 +167,7 @@ public sealed class Ride : DomainModel
     /// <summary>Sets the main (mill) engine power.</summary>
     public bool SetMainEnginePower(EnginePower power)
     {
-        ArgumentNullException.ThrowIfNull(power);
+        EnsureDriveCommandAllowed();
         var changed = _mill.SetPower(power);
         MarkChanged(changed);
         return changed;
@@ -154,7 +179,7 @@ public sealed class Ride : DomainModel
     /// </summary>
     public bool SetHubEnginePower(EnginePower power)
     {
-        ArgumentNullException.ThrowIfNull(power);
+        EnsureDriveCommandAllowed();
         var changed = _mill.SetAllHubPower(power);
         MarkChanged(changed);
         return changed;
@@ -163,6 +188,7 @@ public sealed class Ride : DomainModel
     /// <summary>Sets the main (mill) engine rotation direction.</summary>
     public bool SetMainEngineDirection(MotorDirection direction)
     {
+        EnsureDriveCommandAllowed();
         var changed = _mill.SetDirection(direction);
         MarkChanged(changed);
         return changed;
@@ -174,6 +200,7 @@ public sealed class Ride : DomainModel
     /// </summary>
     public bool SetHubEngineDirection(MotorDirection direction)
     {
+        EnsureDriveCommandAllowed();
         var changed = _mill.SetAllHubDirection(direction);
         MarkChanged(changed);
         return changed;
@@ -275,6 +302,11 @@ public sealed class Ride : DomainModel
     /// </summary>
     public void SetEngineBrakes(bool engaged)
     {
+        if (_state == RideState.Stopping)
+        {
+            throw new DomainValidationException("The engine brake is controlled automatically while the ride is stopping.");
+        }
+
         if (engaged)
         {
             _mill.EngageBrakes();
@@ -287,9 +319,31 @@ public sealed class Ride : DomainModel
         MarkChanged();
     }
 
+    /// <summary>Configures the positive whole-minute duration used by the next cycle.</summary>
+    public bool SetCycleDurationMinutes(long durationMinutes)
+    {
+        if (durationMinutes <= 0)
+        {
+            throw new DomainValidationException("Ride-cycle duration must be a positive whole number of minutes.");
+        }
+
+        if (durationMinutes > TimeSpan.MaxValue.Ticks / TimeSpan.TicksPerMinute)
+        {
+            throw new DomainValidationException("Ride-cycle duration exceeds the supported simulation-time range.");
+        }
+
+        if (_state is RideState.Started or RideState.Stopping or RideState.EmergencyStop)
+        {
+            throw new DomainValidationException($"Ride-cycle duration cannot be changed while the ride is {_state}.");
+        }
+
+        return ApplyChange(ref _cycleDurationMinutes, durationMinutes);
+    }
+
     /// <summary>Engages or releases a specific gondola's yaw brake.</summary>
     public void SetGondolaBrake(int hubIndex, int gondolaIndex, GondolaBrakeState brake)
     {
+        EnsureDriveCommandAllowed();
         var gondola = _mill.GetHub(hubIndex).GetGondola(gondolaIndex);
         if (brake == GondolaBrakeState.Engaged)
         {
@@ -379,16 +433,29 @@ public sealed class Ride : DomainModel
 
         // 3. Physics while in motion; a stopping/emergency ride settles into offloading
         //    (releasing the safety constraints) once it reaches a complete rest.
-        if (_state is RideState.Started or RideState.Stopping or RideState.EmergencyStop)
+        if (_state == RideState.Started)
         {
             _mill.AdvancePhysics(dt.TotalSeconds);
-
-            if (_state is RideState.Stopping or RideState.EmergencyStop && _mill.IsAtRest)
+            AdvanceCycleTimer(dt);
+        }
+        else if (_state == RideState.Stopping)
+        {
+            if (!_mill.IsAtRest)
             {
-                _mill.EngageAllGondolaBrakes();
-                EnterOffloading();
-                _state = RideState.Offloading;
+                AdvanceStopRamp(dt);
+                _mill.AdvancePhysics(dt.TotalSeconds);
             }
+        }
+        else if (_state == RideState.EmergencyStop)
+        {
+            _mill.AdvancePhysics(dt.TotalSeconds);
+        }
+
+        if (_state is RideState.Stopping or RideState.EmergencyStop && _mill.IsAtRest)
+        {
+            _mill.EngageAllGondolaBrakes();
+            EnterOffloading();
+            _state = RideState.Offloading;
         }
 
         // 4. Offloading returns to idle once the last rider has left.
@@ -430,7 +497,11 @@ public sealed class Ride : DomainModel
             _mill.BrakesEngaged,
             _mill.ToTelemetry(),
             hubs,
-            gondolas);
+            gondolas,
+            _cycleDurationMinutes,
+            RemainingCycleTime.TotalSeconds,
+            StopRampProgress,
+            _mill.BrakeApplication);
     }
 
     /// <summary>Runs the entry side-effects for the state being entered.</summary>
@@ -457,14 +528,20 @@ public sealed class Ride : DomainModel
     /// <summary>Locks the safety constraints, releases the engine brake, and releases the gondola brakes so the pods swing.</summary>
     private void EnterStarted()
     {
+        _capturedCycleDuration = TimeSpan.FromTicks(_cycleDurationMinutes * TimeSpan.TicksPerMinute);
+        _elapsedCycleTime = TimeSpan.Zero;
+        _stopRampElapsed = TimeSpan.Zero;
         _mill.ReleaseBrakes();
         _mill.ReleaseAllGondolaBrakes();
     }
 
-    /// <summary>Cuts power and engages the engine brake for a fast, controlled ramp-down.</summary>
+    /// <summary>Captures the commanded powers and initializes a normal stop ramp.</summary>
     private void EnterStopping()
     {
-        _mill.EngageBrakes();
+        _stopEntryMillPower = _mill.Power;
+        _stopEntryHubPower = _mill.Hubs[0].Power;
+        _stopRampElapsed = TimeSpan.Zero;
+        _mill.SetBrakeApplication(0d);
         _mill.EngageAllGondolaBrakes();
     }
 
@@ -475,9 +552,62 @@ public sealed class Ride : DomainModel
         _mill.EngageAllGondolaBrakes();
     }
 
+    private void AdvanceCycleTimer(TimeSpan dt)
+    {
+        var remaining = _capturedCycleDuration - _elapsedCycleTime;
+        if (dt >= remaining)
+        {
+            _elapsedCycleTime = _capturedCycleDuration;
+            EnterStopping();
+            _state = RideState.Stopping;
+            return;
+        }
+
+        _elapsedCycleTime += dt;
+    }
+
+    private void AdvanceStopRamp(TimeSpan dt)
+    {
+        var remaining = RideParameters.NormalStopRampDuration - _stopRampElapsed;
+        _stopRampElapsed = dt >= remaining
+            ? RideParameters.NormalStopRampDuration
+            : _stopRampElapsed + dt;
+
+        var progress = StopRampProgress;
+        var millOpposesCurrentRotation =
+            _mill.AngularVelocity == 0d
+            || _mill.Direction.Sign() * _mill.AngularVelocity < 0d;
+        var hubOpposesCurrentRotation = false;
+        foreach (var hub in _mill.Hubs)
+        {
+            if (hub.AngularVelocity == 0d || hub.Direction.Sign() * hub.AngularVelocity < 0d)
+            {
+                hubOpposesCurrentRotation = true;
+                break;
+            }
+        }
+
+        _mill.SetPower(millOpposesCurrentRotation
+            ? EnginePower.Off
+            : new EnginePower(_stopEntryMillPower.Percent * (1d - progress)));
+        _mill.SetAllHubPower(hubOpposesCurrentRotation
+            ? EnginePower.Off
+            : new EnginePower(_stopEntryHubPower.Percent * (1d - progress)));
+        _mill.SetBrakeApplication(progress);
+    }
+
+    private void EnsureDriveCommandAllowed()
+    {
+        if (_state == RideState.Stopping)
+        {
+            throw new DomainValidationException("Drive commands cannot interrupt the automatic normal-stop ramp.");
+        }
+    }
+
     /// <summary>The ride is at rest: releases the engine brake and the safety constraints so passengers can leave.</summary>
     private void EnterOffloading()
     {
+        _mill.CutAllPower();
         _mill.ReleaseBrakes();
         _mill.ReleaseAllRestraints();
     }

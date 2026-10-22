@@ -35,6 +35,7 @@ internal static class RotationalDynamics
         double theta,
         double driveTorque,
         double coulombFriction,
+        double brakeTorque,
         double viscousFriction,
         double aeroDrag,
         double inertia,
@@ -42,6 +43,7 @@ internal static class RotationalDynamics
         double dt)
     {
         var lossMagnitude = coulombFriction
+            + brakeTorque
             + (viscousFriction * Math.Abs(omega))
             + (aeroDrag * omega * omega);
 
@@ -49,13 +51,14 @@ internal static class RotationalDynamics
         if (Math.Abs(omega) < 1e-9d)
         {
             // At rest, static friction holds the body until the drive exceeds it.
-            if (driveTorque > coulombFriction)
+            var staticFriction = coulombFriction + brakeTorque;
+            if (driveTorque > staticFriction)
             {
-                netTorque = driveTorque - coulombFriction;
+                netTorque = driveTorque - staticFriction;
             }
-            else if (driveTorque < -coulombFriction)
+            else if (driveTorque < -staticFriction)
             {
-                netTorque = driveTorque + coulombFriction;
+                netTorque = driveTorque + staticFriction;
             }
             else
             {
@@ -71,7 +74,9 @@ internal static class RotationalDynamics
         var newOmega = omega + (alpha * dt);
 
         // While coasting, losses must stop the body, not spin it up in reverse.
-        if (driveTorque == 0d && omega != 0d && Math.Sign(newOmega) != Math.Sign(omega))
+        if ((driveTorque == 0d || brakeTorque > 0d)
+            && omega != 0d
+            && Math.Sign(newOmega) != Math.Sign(omega))
         {
             newOmega = 0d;
         }

@@ -136,8 +136,14 @@ public sealed class RideStateMachineTests
     [InlineData(RideState.Stopping)]
     public void Emergency_stop_is_accepted_from_every_active_state(RideState from)
     {
-        var ride = RideInState(from);
+        var ride = from == RideState.Stopping
+            ? RideInState(RideState.Started)
+            : RideInState(from);
         ride.SetMainEnginePower(new EnginePower(50));
+        if (from == RideState.Stopping)
+        {
+            ride.RequestTransition(RideState.Stopping);
+        }
 
         ride.RequestTransition(RideState.EmergencyStop);
 

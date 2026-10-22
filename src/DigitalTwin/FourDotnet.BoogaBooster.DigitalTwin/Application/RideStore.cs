@@ -70,6 +70,15 @@ public sealed class RideStore : IRideStore, IRideTelemetryProvider
         }
     }
 
+    public RideTelemetry SetCycleDurationMinutes(long durationMinutes)
+    {
+        lock (_gate)
+        {
+            _ride.SetCycleDurationMinutes(durationMinutes);
+            return _ride.ToTelemetry();
+        }
+    }
+
     public RideTelemetry SetMainEnginePower(EnginePower power)
     {
         lock (_gate)

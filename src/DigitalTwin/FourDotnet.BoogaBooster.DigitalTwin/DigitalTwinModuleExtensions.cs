@@ -10,6 +10,7 @@ using FourDotnet.BoogaBooster.DigitalTwin.Features.SetHubEngineDirection;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.SetHubEnginePower;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.SetMainEngineDirection;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.SetMainEnginePower;
+using FourDotnet.BoogaBooster.DigitalTwin.Features.SetRideCycleDuration;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.StartRide;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.StopRide;
 using Microsoft.Extensions.DependencyInjection;
@@ -60,6 +61,7 @@ public static class DigitalTwinModuleExtensions
         services.AddScoped<IQueryHandler<GetRideTelemetryQuery, RideTelemetry>, GetRideTelemetryQueryHandler>();
         services.AddScoped<ICommandHandler<SetMainEnginePowerCommand>, SetMainEnginePowerCommandHandler>();
         services.AddScoped<ICommandHandler<SetHubEnginePowerCommand>, SetHubEnginePowerCommandHandler>();
+        services.AddScoped<ICommandHandler<SetRideCycleDurationCommand>, SetRideCycleDurationCommandHandler>();
         services.AddScoped<ICommandHandler<SetMainEngineDirectionCommand>, SetMainEngineDirectionCommandHandler>();
         services.AddScoped<ICommandHandler<SetHubEngineDirectionCommand>, SetHubEngineDirectionCommandHandler>();
         services.AddScoped<ICommandHandler<BoardPassengerCommand>, BoardPassengerCommandHandler>();
