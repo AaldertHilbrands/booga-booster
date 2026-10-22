@@ -149,14 +149,28 @@ shipped baseline values.
 
 ---
 
-## 3.5 The E-stop ramp (not an instant halt)
+## 3.5 Normal cycle stop and Emergency Stop
 
-An emergency stop on a real ride carrying 32 people **cannot** yank ω to zero — that would
-be a lethal deceleration. The E-stop instead commands a **controlled decel ramp** over
-`≈ 8 s` (default): the motor is driven in reverse / regenerative braking within a torque
-limit so that |α| stays inside a human-safe bound, and the ride is walked down to rest
-before entering the `Faulted` state. Model it as a bounded target-ω ramp, not a
-`ω = 0` assignment. (State-machine details: Plan §6.)
+A normal `Stopping` transition — whether requested by an operator or started by cycle
+expiry — uses a deterministic ramp over the eight-second reference duration. At stop
+entry, the simulation captures the commanded mill and hub powers. Each fixed simulation
+step reduces those commands linearly toward zero while increasing normalized brake
+application from zero toward full. The ramp uses simulation time, never reverses a motor
+to oppose rotation, and settles early when the rotating bodies reach rest. The ride keeps
+its safety constraints locked until it enters `Offloading`.
+
+An Emergency Stop is a separate action. It cuts drive power and commands full engine-brake
+application immediately; it does **not** use the normal cycle-stop ramp. The physics
+integrator still reduces angular velocity according to torque and inertia — it never
+assigns `ω = 0` — but this immediate-full-brake behavior is not an eight-second
+target-speed profile. It is the specified digital-twin behavior, not evidence that the
+response is safe for a real ride.
+
+The eight-second normal-stop duration is a starting tuning reference, not a validated
+safety limit. The model does not define a numerical jerk limit, and peak felt-G and jerk
+must be measured across empty and loaded cases and both rotation directions before this
+profile can be described as safety-verified. Real equipment requires a separate
+engineering safety analysis.
 
 ---
 

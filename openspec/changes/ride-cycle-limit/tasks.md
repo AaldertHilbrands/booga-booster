@@ -1,6 +1,6 @@
 ## 1. Backend cycle timing and domain behavior
 
-- [ ] 1.1 Add named defaults for the five-minute cycle limit and eight-second normal-stop ramp; document their units and rationale in the physics parameter appendix.
+- [x] 1.1 Add named defaults for the five-minute cycle limit and eight-second normal-stop ramp; document their units and rationale in the physics parameter appendix.
 - [x] 1.2 Extend the ride aggregate with a validated configurable duration and per-cycle elapsed simulation time; capture the limit on entry to `Started`, reset elapsed time for each new cycle, and reject changes while `Started`, `Stopping`, or `EmergencyStop`.
 - [x] 1.3 Automatically enter `Stopping` when the captured cycle duration expires, using fixed-step simulation time and without exposing the automatic transition as an operator action.
 - [x] 1.4 Add progressive normal-stop drive-power and brake-torque controls for the mill and hubs; settle early at rest and preserve immediate full braking for `EmergencyStop`.
@@ -15,7 +15,7 @@
 
 ## 3. Physics documentation
 
-- [ ] 3.1 Update `docs/03-motor-power-and-torque.md` to distinguish the normal cycle-stop ramp from Emergency Stop and describe the power/brake progression.
+- [x] 3.1 Update `docs/03-motor-power-and-torque.md` to distinguish the normal cycle-stop ramp from Emergency Stop and describe the power/brake progression.
 - [ ] 3.2 Verify or revise the eight-second ramp against empty and loaded inertia, both rotation directions, peak felt-G, and jerk; update the value if needed.
 - [ ] 3.3 Update `docs/appendix-parameters.md` with the cycle default and verified stop-ramp parameter.
 

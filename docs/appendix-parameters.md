@@ -38,7 +38,20 @@ number buried in the physics.
 | Over-speed cap (mill) | `ω_max` | 2.5 | rad/s |
 | Imbalance dispatch limit | — | 50 | mm |
 | Wind cutoff | `windMax` | 18 | m/s |
-| E-stop decel ramp | — | 8 | s |
+
+## Cycle and stopping profile
+
+| Parameter | Symbol | Default | Unit |
+|-----------|--------|--------:|------|
+| Powered ride-cycle duration | `T_cycle` | 5 | min |
+| Normal cycle-stop ramp reference | `T_stop` | 8 | s |
+
+The cycle duration is the powered time before a normal stop begins; the additional time
+needed to reach rest is not included. The normal-stop ramp linearly reduces captured mill
+and hub drive power while increasing brake application. Eight seconds is an initial
+tuning reference only: peak felt-G and jerk have not been verified for empty and loaded
+rides or both rotation directions. Emergency Stop is distinct and commands full
+engine-brake application immediately; it does not use this normal-stop ramp.
 
 ## Loss-model coefficients
 
